@@ -15,11 +15,13 @@ class ErrorResponse implements ServiceResponseInterface
     private string $message;
 
     /**
+     * @param int $code
      * @param string $message
      */
     public function __construct(int $code, string $message)
     {
         $this->message = $message;
+        $this->code = $code;
     }
 
     /**
@@ -36,5 +38,13 @@ class ErrorResponse implements ServiceResponseInterface
     public function getErrorMessage(): ?string
     {
         return $this->message;
+    }
+
+    /**
+     * @return int|null
+     */
+    public function getErrorCode(): ?int
+    {
+        return $this->code;
     }
 }

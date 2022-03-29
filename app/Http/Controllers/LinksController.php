@@ -10,7 +10,6 @@ use App\Entity\Response\RelationsResponse;
 use App\Http\Requests\LinksRequest;
 use App\Service\RequestService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Nbsbbs\Common\Language\LanguageFactory;
 
 class LinksController extends Controller
@@ -26,12 +25,11 @@ class LinksController extends Controller
     public function __construct(RequestService $requestService)
     {
         $this->requestService = $requestService;
-
     }
 
     /**
-     * @param LinksRequest $request
-     *
+     * @param LinksRequest $linksRequest
+     * @return JsonResponse
      * @queryParam query string required Query text
      * @queryParam lang_code string required Language code
      * @queryParam domain string Domain name (for filtration purpose)
@@ -39,9 +37,9 @@ class LinksController extends Controller
      * @queryParam offset int Offset (for paging)
      * @queryParam weightThreshold int Minimum allowed link weight (for filtration purpose)
      */
-    public function show(LinksRequest $request)
+    public function show(LinksRequest $linksRequest): JsonResponse
     {
-        $validated = $request->validated();
+        $validated = $linksRequest->validated();
 
         $request = new GetRelationsRequest(new Query($validated['query'], LanguageFactory::createLanguage($validated['lang_code'])));
         $request->withLimitOffset($validated['limit'], $validated['offset']);
@@ -52,7 +50,7 @@ class LinksController extends Controller
 
         $response = $this->requestService->getRelations($request);
         if ($response instanceof ErrorResponse) {
-            return $this->returnError($request, $response->getErrorMessage(), $response->getErrorCode());
+            return $this->returnError($response->getErrorMessage(), $response->getErrorCode());
         } elseif ($response instanceof RelationsResponse) {
             return new JsonResponse([
                 'status' => true,
@@ -78,12 +76,11 @@ class LinksController extends Controller
     }
 
     /**
-     * @param Request $request
      * @param string $error
      * @param int $code
      * @return JsonResponse
      */
-    protected function returnError(Request $request, string $error, int $code)
+    protected function returnError(string $error, int $code): JsonResponse
     {
         return new JsonResponse(['status' => false, 'error' => $error], $code);
     }

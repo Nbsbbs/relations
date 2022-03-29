@@ -43,6 +43,9 @@ class LinksRequest extends FormRequest
         ];
     }
 
+    /**
+     * Add default values
+     */
     protected function prepareForValidation(): void
     {
         $this->merge([
