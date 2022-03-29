@@ -10,12 +10,12 @@ class Query implements QueryInterface
     /**
      * @var string
      */
-    private string $query;
+    protected string $query;
 
     /**
      * @var LanguageInterface
      */
-    private LanguageInterface $language;
+    protected LanguageInterface $language;
 
     /**
      * @param string $query
