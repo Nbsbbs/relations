@@ -64,6 +64,7 @@ class EventsQueueListenCommand extends Command
                 return 0;
             }
         }
+        $this->info('I\'m done (timeout).');
         return 0;
     }
 }
