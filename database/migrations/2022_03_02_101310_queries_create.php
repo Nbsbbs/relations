@@ -17,7 +17,6 @@ class QueriesCreate extends Migration
             $table->id();
             $table->string('language_code', 4)->charset('latin1');
             $table->string('query', 255);
-            $table->string('hash', 32);
             $table->timestamps();
             $table->unique(['query', 'language_code'], 'query_with_language');
         });
