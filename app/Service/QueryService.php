@@ -38,13 +38,12 @@ class QueryService
      */
     public function store(QueryInterface $query): StoredQueryInterface
     {
-        $stmt = $this->pdo->prepare('INSERT INTO `queries` (`language_code`, `query`, `hash`, `created_at`) VALUES (?, ?, ?, ?)');
+        $stmt = $this->pdo->prepare('INSERT INTO `queries` (`language_code`, `query`, `created_at`) VALUES (?, ?, ?, ?)');
 
         try {
             $stmt->execute([
                 $query->getLanguage()->getCode(),
                 $query->getQuery(),
-                self::hash($query),
                 DateTimeService::dateTime()->format('Y-m-d H:i:s'),
             ]);
             $id = $this->pdo->lastInsertId();
@@ -87,20 +86,11 @@ class QueryService
      */
     public function find(QueryInterface $query): ?StoredQueryInterface
     {
-        $stmt = $this->pdo->prepare('SELECT * FROM `queries` WHERE `hash`=? and `language_code`=? and `query`=?');
-        $stmt->execute([md5($query->getQuery()), $query->getLanguage()->getCode(), $query->getQuery()]);
+        $stmt = $this->pdo->prepare('SELECT * FROM `queries` WHERE `language_code`=? and `query`=?');
+        $stmt->execute([$query->getLanguage()->getCode(), $query->getQuery()]);
         if ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
             return new StoredQuery($row['id'], new Query($row['query'], LanguageFactory::createLanguage($row['language_code'])));
         }
         return null;
-    }
-
-    /**
-     * @param QueryInterface $query
-     * @return string
-     */
-    public static function hash(QueryInterface $query): string
-    {
-        return md5(trim($query->getQuery()));
     }
 }
