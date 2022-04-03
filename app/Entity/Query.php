@@ -23,7 +23,7 @@ class Query implements QueryInterface
      */
     public function __construct(string $query, LanguageInterface $language)
     {
-        $this->query = $query;
+        $this->query = self::normalizeQueryText($query);
         $this->language = $language;
     }
 
@@ -41,5 +41,16 @@ class Query implements QueryInterface
     public function getLanguage(): LanguageInterface
     {
         return $this->language;
+    }
+
+    /**
+     * @param string $queryText
+     * @return string
+     */
+    public static function normalizeQueryText(string $queryText): string
+    {
+        $low = mb_strtolower($queryText);
+        $spaces = preg_replace("#\s+#", " ", $low);
+        return trim($low);
     }
 }
