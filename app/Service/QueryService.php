@@ -38,7 +38,7 @@ class QueryService
      */
     public function store(QueryInterface $query): StoredQueryInterface
     {
-        $stmt = $this->pdo->prepare('INSERT INTO `queries` (`language_code`, `query`, `created_at`) VALUES (?, ?, ?, ?)');
+        $stmt = $this->pdo->prepare('INSERT INTO `queries` (`language_code`, `query`, `created_at`) VALUES (?, ?, ?)');
 
         try {
             $stmt->execute([

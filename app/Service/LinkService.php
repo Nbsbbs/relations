@@ -46,7 +46,6 @@ class LinkService
         }
 
         try {
-            $this->pdo->beginTransaction();
             $stmt = $this->pdo->prepare('INSERT INTO `links_history` (`domain`, `query_first`, `query_second`, `weight`, `created_at`, `reason`) VALUES (?, ?, ?, ?, ?, ?)');
             $stmt->execute([
                 $domain->getDomainName(),
@@ -57,12 +56,8 @@ class LinkService
                 $reason,
             ]);
 
-            $stmt = $this->pdo->prepare('INSERT INTO `query_relations` (query_first, query_second, weight, domain) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE weight=weight+VALUE(weight)');
-            $stmt->execute([$query1->getId(), $query2->getId(), $weight, $domain->getDomainName()]);
-            $this->pdo->commit();
             return true;
         } catch (\Throwable $e) {
-            $this->pdo->rollBack();
             throw new \RuntimeException('Cannot add link: ' . $e->getMessage());
         }
     }
