@@ -39,6 +39,18 @@ class ArrayNormalizerTest extends TestCase
                 new SearchLogQuery('a', new EnglishLanguage(), false),
                 new SearchLogQuery('b', new EnglishLanguage(), false),
                 new SearchLogQuery('c', new EnglishLanguage(), false),
+            ],
+            [
+                new SearchLogQuery('a', new EnglishLanguage(), false),
+                new SearchLogQuery('b', new EnglishLanguage(), false),
+                new SearchLogQuery('c', new EnglishLanguage(), false),
+            ],
+        ];
+        yield [
+            [
+                new SearchLogQuery('a', new EnglishLanguage(), false),
+                new SearchLogQuery('b', new EnglishLanguage(), false),
+                new SearchLogQuery('c', new EnglishLanguage(), false),
                 new SearchLogQuery('c', new EnglishLanguage(), false),
             ],
             [
