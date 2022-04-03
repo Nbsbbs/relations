@@ -10,6 +10,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
 class AddLinkCreationEventJob implements ShouldQueue
 {
@@ -36,6 +37,10 @@ class AddLinkCreationEventJob implements ShouldQueue
     {
         $first = $queryService->locateOrCreate($this->event->getQueryFirst());
         $second = $queryService->locateOrCreate($this->event->getQuerySecond());
+        if ($first->getId() === $second->getId()) {
+            Log::warning('Trying to add relation between the same query: ' . $first->getId() . " ('" . $first->getQuery() . "', '" . $second->getQuery() . "') ");
+            return;
+        }
         $linkService->addLink(
             $first,
             $second,
