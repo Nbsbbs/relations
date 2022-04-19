@@ -35,7 +35,7 @@ class GetRelationsRequest
     /**
      * @var bool
      */
-    private bool $isNeedMetaTotalFound = false;
+    private bool $isNeedMetaTotalFound = true;
 
     /**
      * @param QueryInterface $query

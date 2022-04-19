@@ -2,7 +2,9 @@
 
 namespace App\Service;
 
+use App\Entity\Relation;
 use App\Entity\StoredQuery;
+use ClickHouseDB\Client;
 use Nbsbbs\Common\DomainInterface;
 
 class LinkService
@@ -13,11 +15,17 @@ class LinkService
     private \PDO $pdo;
 
     /**
+     * @var Client
+     */
+    private Client $clickhouseClient;
+
+    /**
      * @param \PDO $pdo
      */
-    public function __construct(\PDO $pdo)
+    public function __construct(\PDO $pdo, Client $clickhouseClient)
     {
         $this->pdo = $pdo;
+        $this->clickhouseClient = $clickhouseClient;
     }
 
     /**
@@ -37,113 +45,132 @@ class LinkService
     ): bool {
         if ($secondQuery->getId() === $firstQuery->getId()) {
             throw new \InvalidArgumentException('Cannot add relation between the same query');
-        } elseif ($secondQuery->getId() < $firstQuery->getId()) {
-            $query1 = $secondQuery;
-            $query2 = $firstQuery;
-        } else {
-            $query1 = $firstQuery;
-            $query2 = $secondQuery;
         }
+        $createdDate = DateTimeService::dateTime();
 
-        try {
-            $stmt = $this->pdo->prepare('INSERT INTO `links_history` (`domain`, `query_first`, `query_second`, `weight`, `created_at`, `reason`) VALUES (?, ?, ?, ?, ?, ?)');
-            $stmt->execute([
-                $domain->getDomainName(),
-                $query1->getId(),
-                $query2->getId(),
-                $weight,
-                DateTimeService::dateTime()->format('Y-m-d H:i:s'),
-                $reason,
-            ]);
-
-            return true;
-        } catch (\Throwable $e) {
-            throw new \RuntimeException('Cannot add link: ' . $e->getMessage());
-        }
+        // add to clickhouse two times
+        $this->clickhouseClient->insert(
+            'links',
+            [
+                [
+                    $firstQuery->getId(),
+                    $secondQuery->getId(),
+                    $domain->getDomainName(),
+                    $weight,
+                    $reason,
+                    $createdDate->format('Y-m-d H:i:s'),
+                ],
+                [
+                    $secondQuery->getId(),
+                    $firstQuery->getId(),
+                    $domain->getDomainName(),
+                    $weight,
+                    $reason,
+                    $createdDate->format('Y-m-d H:i:s'),
+                ],
+            ],
+            [
+                'firstQueryId',
+                'secondQueryId',
+                'domain_name',
+                'weight',
+                'reason',
+                'created_date',
+            ]
+        );
+        return true;
     }
 
     /**
-     * @param StoredQuery $query
-     * @param int $limit
-     * @param int $offset
-     * @param int $weightThreshold
-     * @return array
-     */
-    public function getRelationsIds(StoredQuery $query, int $limit, int $offset, int $weightThreshold): array
-    {
-        $result = [];
-        $stmt = $this->pdo->prepare('SELECT IF(qr.`query_first`=?, qr.`query_second`, qr.`query_first`) AS query_id, SUM(qr.weight) as w FROM `query_relations` qr WHERE qr.query_first=? OR qr.query_second=? GROUP BY query_id HAVING w>? ORDER BY w DESC LIMIT ? OFFSET ?');
-        $stmt->execute([$query->getId(), $query->getId(), $query->getId(), $weightThreshold, $limit, $offset]);
-
-        while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
-            $result[] = $row['query_id'];
-        }
-
-        return $result;
-    }
-
-    /**
-     * @param StoredQuery $query
+     * @param StoredQuery $firstQuery
+     * @param StoredQuery $secondQuery
      * @param DomainInterface $domain
-     * @param int $limit
-     * @param int $offset
-     * @param int $weightThreshold
-     * @return array
+     * @param int $weight
+     * @param string $reason
+     * @return \Generator
      */
-    public function getRelationsIdsWithDomain(
-        StoredQuery     $query,
+    public function createLinkJson(
+        StoredQuery     $firstQuery,
+        StoredQuery     $secondQuery,
         DomainInterface $domain,
-        int             $limit,
-        int             $offset,
-        int             $weightThreshold
-    ): array {
-        $result = [];
-        $stmt = $this->pdo->prepare('SELECT IF(`qr`.`query_first`=?, `qr`.`query_second`, `qr`.`query_first`) AS query_id, `qr`.weight  FROM `query_relations` `qr` WHERE (`qr`.query_first=? OR `qr`.query_second=?) AND `qr`.`domain`=? AND `qr`.`weight`>=? ORDER BY `qr`.`weight` DESC LIMIT ? OFFSET ?');
-        $stmt->execute([
-            $query->getId(),
-            $query->getId(),
-            $query->getId(),
-            $domain->getDomainName(),
-            $weightThreshold,
-            $limit,
-            $offset,
+        int             $weight = 2,
+        string          $reason = ''
+    ): \Generator {
+        if ($secondQuery->getId() === $firstQuery->getId()) {
+            throw new \InvalidArgumentException('Cannot add relation between the same query');
+        }
+        $createdDate = DateTimeService::dateTime();
+
+        yield json_encode([
+            'firstQueryId' => $firstQuery->getId(),
+            'secondQueryId' => $secondQuery->getId(),
+            'domain_name' => $domain->getDomainName(),
+            'weight' => $weight,
+            'reason' => $reason,
+            'created_date' => $createdDate->format('Y-m-d H:i:s'),
         ]);
+        yield json_encode([
+            'firstQueryId' => $secondQuery->getId(),
+            'secondQueryId' => $firstQuery->getId(),
+            'domain_name' => $domain->getDomainName(),
+            'weight' => $weight,
+            'reason' => $reason,
+            'created_date' => $createdDate->format('Y-m-d H:i:s'),
+        ]);
+    }
 
-        while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
-            $result[] = $row['query_id'];
+    /**
+     * @param int $queryId
+     * @return \Generator|int[]
+     */
+    public function getAllLinkedIds(int $queryId): \Generator
+    {
+        $stmt = $this->pdo->prepare('SELECT distinct(query_second) as id from `links_history` where `query_first`=?');
+        $stmt->execute([$queryId]);
+        while ($row = $stmt->fetch(\PDO::FETCH_NUM)) {
+            yield (int) $row[0];
         }
 
-        return $result;
+        $stmt = $this->pdo->prepare('SELECT distinct(query_first) as id from `links_history` where `query_second`=?');
+        $stmt->execute([$queryId]);
+        while ($row = $stmt->fetch(\PDO::FETCH_NUM)) {
+            yield (int) $row[0];
+        }
     }
 
     /**
-     * @param StoredQuery $query
-     * @param int $weightThreshold
-     * @return int
+     * @param int $queryId
+     * @return \Generator
      */
-    public function getTotalRelations(StoredQuery $query, int $weightThreshold = 0): int
+    public function prepareRelations(int $queryId): \Generator
     {
-        $ids = $this->getRelationsIds($query, 10000, 0, $weightThreshold);
-        return sizeof($ids);
+        $stmt = $this->pdo->prepare('select query_first, query_second, sum(weight) as w from links_history where query_first=? group by query_first, query_second');
+        $stmt->execute([$queryId]);
+
+        while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+            yield new Relation($row['query_first'], $row['query_second'], $row['w'], 'all.com');
+        }
+
+        $stmt = $this->pdo->prepare('select query_first, query_second, sum(weight) as w from links_history where query_second=? group by query_first, query_second');
+        $stmt->execute([$queryId]);
+
+        while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+            yield new Relation($row['query_second'], $row['query_first'], $row['w'], 'all.com');
+        }
     }
 
     /**
-     * @param StoredQuery $query
-     * @param DomainInterface $domain
-     * @param int $weightThreshold
-     * @return int
+     * @param int $lesserQueryId
+     * @param int $greaterQueryId
+     * @return \Generator|Relation[]
      */
-    public function getTotalRelationsWithDomain(
-        StoredQuery     $query,
-        DomainInterface $domain,
-        int             $weightThreshold = 0
-    ): int {
-        $stmt = $this->pdo->prepare('SELECT count(*) from `query_relations` where (`query_first`=? or `query_second`=?) AND weight>=? AND `domain`=?');
-        $stmt->execute([$query->getId(), $query->getId(), $weightThreshold, $domain->getDomainName()]);
-        if ($row = $stmt->fetch(\PDO::FETCH_NUM)) {
-            return (int) $row[0];
-        } else {
-            throw new \RuntimeException('DB error');
+    public function getPairRelations(int $lesserQueryId, int $greaterQueryId): \Generator
+    {
+        $stmt = $this->pdo->prepare('select query_first, query_second, domain, sum(weight) as w from links_history where query_first=? and query_second=? group by query_first, query_second, domain');
+        $stmt->execute([$lesserQueryId, $greaterQueryId]);
+
+        while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+            yield new Relation($row['query_first'], $row['query_second'], $row['w'], $row['domain']);
         }
     }
 }

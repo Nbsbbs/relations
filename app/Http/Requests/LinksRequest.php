@@ -38,8 +38,8 @@ class LinksRequest extends FormRequest
             'lang_code' => ['required', new SupportedLanguageCode()],
             'domain' => ['sometimes', new DomainValidator()],
             'weightThreshold' => 'integer|min:0',
-            'limit' => 'integer|min:1|max:100',
-            'offset' => 'integer|min:0|max:1000',
+            'limit' => 'integer|min:1|max:1000',
+            'offset' => 'integer|min:0|max:10000',
         ];
     }
 

@@ -10,23 +10,20 @@ use App\Entity\Response\ServiceResponseInterface;
 class RequestService
 {
     /**
-     * @var LinkService
-     */
-    private LinkService $linkService;
-
-    /**
      * @var QueryService
      */
     private QueryService $queryService;
+
+    private RelationService $relationService;
 
     /**
      * @param LinkService $linkService
      * @param QueryService $queryService
      */
-    public function __construct(LinkService $linkService, QueryService $queryService)
+    public function __construct(QueryService $queryService, RelationService $relationService)
     {
-        $this->linkService = $linkService;
         $this->queryService = $queryService;
+        $this->relationService = $relationService;
     }
 
     /**
@@ -43,14 +40,14 @@ class RequestService
 
             $totalFound = null;
             if ($request->isDomainFiltered()) {
-                $relationsIds = $this->linkService->getRelationsIdsWithDomain($storedQuery, $request->getDomain(), $request->getLimit(), $request->getOffset(), $request->getWeightThreshold());
+                $relationsIds = $this->relationService->getRelationsIdsWithDomain($storedQuery, $request->getDomain(), $request->getLimit(), $request->getOffset(), $request->getWeightThreshold());
                 if ((sizeof($relationsIds) > 0) and $request->isNeedTotalFound()) {
-                    $totalFound = $this->linkService->getTotalRelationsWithDomain($storedQuery, $request->getDomain(), $request->getWeightThreshold());
+                    $totalFound = $this->relationService->getTotalRelationsWithDomain($storedQuery, $request->getDomain(), $request->getWeightThreshold());
                 }
             } else {
-                $relationsIds = $this->linkService->getRelationsIds($storedQuery, $request->getLimit(), $request->getOffset(), $request->getWeightThreshold());
+                $relationsIds = $this->relationService->getRelationsIds($storedQuery, $request->getLimit(), $request->getOffset(), $request->getWeightThreshold());
                 if ((sizeof($relationsIds) > 0) and $request->isNeedTotalFound()) {
-                    $totalFound = $this->linkService->getTotalRelations($storedQuery, $request->getWeightThreshold());
+                    $totalFound = $this->relationService->getTotalRelations($storedQuery, $request->getWeightThreshold());
                 }
             }
             if (sizeof($relationsIds) > 0) {

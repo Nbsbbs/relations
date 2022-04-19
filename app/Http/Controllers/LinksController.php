@@ -7,6 +7,7 @@ use App\Entity\Query;
 use App\Entity\Request\GetRelationsRequest;
 use App\Entity\Response\ErrorResponse;
 use App\Entity\Response\RelationsResponse;
+use App\Entity\Response\ServiceResponseInterface;
 use App\Http\Requests\LinksRequest;
 use App\Service\RequestService;
 use Illuminate\Http\JsonResponse;
@@ -39,16 +40,7 @@ class LinksController extends Controller
      */
     public function show(LinksRequest $linksRequest): JsonResponse
     {
-        $validated = $linksRequest->validated();
-
-        $request = new GetRelationsRequest(new Query($validated['query'], LanguageFactory::createLanguage($validated['lang_code'])));
-        $request->withLimitOffset($validated['limit'], $validated['offset']);
-        $request->withWeightThreshold($validated['weightThreshold']);
-        if (!empty($validated['domain'])) {
-            $request->withDomain(new Domain($validated['domain']));
-        }
-
-        $response = $this->requestService->getRelations($request);
+        $response = $this->getRelationResponse($linksRequest);
         if ($response instanceof ErrorResponse) {
             return $this->returnError($response->getErrorMessage(), $response->getErrorCode());
         } elseif ($response instanceof RelationsResponse) {
@@ -56,10 +48,69 @@ class LinksController extends Controller
                 'status' => true,
                 'domain' => ($response->isDomainFiltered()) ? $response->getDomain()->getDomainName() : null,
                 'queries' => $this->convertQueriesToArray($response),
+                'totalFound' => $response->totalSize() ?? null,
+            ], 200, [], JSON_UNESCAPED_UNICODE);
+        } else {
+            throw new \RuntimeException('Unexpected response type');
+        }
+    }
+
+    /**
+     * @param LinksRequest $linksRequest
+     * @return \Illuminate\Contracts\Foundation\Application|\Illuminate\Contracts\View\Factory|\Illuminate\Contracts\View\View
+     */
+    public function showPreview(LinksRequest $linksRequest)
+    {
+        $response = $this->getRelationResponse($linksRequest);
+        if ($response instanceof ErrorResponse) {
+            return view('relations', [
+                'status' => false,
+                'error' => $response->getErrorMessage(),
+                'code' => $response->getErrorCode(),
+                'languages' => $this->createLanguages(),
+            ]);
+        } elseif ($response instanceof RelationsResponse) {
+            return view('relations', [
+                'status' => true,
+                'domain' => ($response->isDomainFiltered()) ? $response->getDomain()->getDomainName() : null,
+                'queries' => $this->convertQueriesToArray($response),
+                'totalFound' => $response->totalSize() ?? null,
+                'validated' => $linksRequest->validated(),
+                'languages' => $this->createLanguages(),
             ]);
         } else {
             throw new \RuntimeException('Unexpected response type');
         }
+    }
+
+    /**
+     * @return array
+     */
+    protected function createLanguages(): array
+    {
+        $result = [];
+        foreach (LanguageFactory::allLanguages() as $language) {
+            $result[$language->getCode()] = $language->getTitle();
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param LinksRequest $linksRequest
+     * @return ServiceResponseInterface
+     */
+    protected function getRelationResponse(LinksRequest $linksRequest): ServiceResponseInterface
+    {
+        $validated = $linksRequest->validated();
+        $request = new GetRelationsRequest(new Query($validated['query'], LanguageFactory::createLanguage($validated['lang_code'])));
+        $request->withLimitOffset($validated['limit'], $validated['offset']);
+        $request->withWeightThreshold($validated['weightThreshold']);
+        if (!empty($validated['domain'])) {
+            $request->withDomain(new Domain($validated['domain']));
+        }
+
+        return $this->requestService->getRelations($request);
     }
 
     /**
@@ -82,6 +133,6 @@ class LinksController extends Controller
      */
     protected function returnError(string $error, int $code): JsonResponse
     {
-        return new JsonResponse(['status' => false, 'error' => $error], $code);
+        return new JsonResponse(['status' => false, 'error' => $error], 500);
     }
 }
