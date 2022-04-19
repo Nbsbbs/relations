@@ -7,6 +7,8 @@ use App\Service\QueryService;
 use App\Service\RelationService;
 use App\Service\RequestService;
 use ClickHouseDB\Client as ClickhouseClient;
+use GearmanClient;
+use GearmanWorker;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
 use Nbsbbs\Common\Queue\GearmanClientFactory;
@@ -27,7 +29,7 @@ class AppServiceProvider extends ServiceProvider
             return new LinkService(DB::connection()->getPdo(), $app->get(ClickhouseClient::class));
         });
         $this->app->bind(RelationService::class, function ($app) {
-            return new RelationService(DB::connection()->getPdo(), $app->get(ClickhouseClient::class));
+            return new RelationService($app->get(ClickhouseClient::class));
         });
         $this->app->bind(RequestService::class, function ($app) {
             return new RequestService(
@@ -35,11 +37,11 @@ class AppServiceProvider extends ServiceProvider
                 $app->make(RelationService::class)
             );
         });
-        $this->app->singleton(\GearmanClient::class, function ($app) {
+        $this->app->singleton(GearmanClient::class, function ($app) {
             return (new GearmanClientFactory(env('GEARMAN_IP')))->create();
         });
-        $this->app->singleton(\GearmanWorker::class, function ($app) {
-            $worker = new \GearmanWorker();
+        $this->app->singleton(GearmanWorker::class, function ($app) {
+            $worker = new GearmanWorker();
             $worker->addServer(env('GEARMAN_IP'));
             return $worker;
         });
