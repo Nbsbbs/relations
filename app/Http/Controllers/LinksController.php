@@ -10,8 +10,12 @@ use App\Entity\Response\RelationsResponse;
 use App\Entity\Response\ServiceResponseInterface;
 use App\Http\Requests\LinksRequest;
 use App\Service\RequestService;
+use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Contracts\View\Factory;
+use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Nbsbbs\Common\Language\LanguageFactory;
+use RuntimeException;
 
 class LinksController extends Controller
 {
@@ -21,11 +25,17 @@ class LinksController extends Controller
     protected RequestService $requestService;
 
     /**
+     * @var float
+     */
+    protected float $startStamp;
+
+    /**
      * @param RequestService $requestService
      */
     public function __construct(RequestService $requestService)
     {
         $this->requestService = $requestService;
+        $this->startStamp = microtime(true);
     }
 
     /**
@@ -51,13 +61,22 @@ class LinksController extends Controller
                 'totalFound' => $response->totalSize() ?? null,
             ], 200, [], JSON_UNESCAPED_UNICODE);
         } else {
-            throw new \RuntimeException('Unexpected response type');
+            throw new RuntimeException('Unexpected response type');
         }
     }
 
     /**
+     * @return string
+     */
+    protected function getElapsedTime(): string
+    {
+        return number_format(microtime(true) - $this->startStamp, 3);
+    }
+
+    /**
      * @param LinksRequest $linksRequest
-     * @return \Illuminate\Contracts\Foundation\Application|\Illuminate\Contracts\View\Factory|\Illuminate\Contracts\View\View
+     *
+     * @return Application|Factory|View
      */
     public function showPreview(LinksRequest $linksRequest)
     {
@@ -68,6 +87,7 @@ class LinksController extends Controller
                 'error' => $response->getErrorMessage(),
                 'code' => $response->getErrorCode(),
                 'languages' => $this->createLanguages(),
+                'elapsed' => $this->getElapsedTime(),
             ]);
         } elseif ($response instanceof RelationsResponse) {
             return view('relations', [
@@ -77,9 +97,10 @@ class LinksController extends Controller
                 'totalFound' => $response->totalSize() ?? null,
                 'validated' => $linksRequest->validated(),
                 'languages' => $this->createLanguages(),
+                'elapsed' => $this->getElapsedTime(),
             ]);
         } else {
-            throw new \RuntimeException('Unexpected response type');
+            throw new RuntimeException('Unexpected response type');
         }
     }
 

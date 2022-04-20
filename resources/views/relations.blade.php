@@ -33,5 +33,7 @@
 @else
     {{ $error }}
 @endif
+
+<p>Elapsed time: {{ $elapsed }}</p>
 </body>
 </html>
