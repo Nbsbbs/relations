@@ -11,7 +11,9 @@ use App\Service\QueryService;
 use Generator;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
+use InvalidArgumentException;
 use Nbsbbs\Common\Language\LanguageFactory;
+use Throwable;
 
 class ImportOldLogs extends Command
 {
@@ -87,34 +89,69 @@ class ImportOldLogs extends Command
         $this->initLogFilename($this->logSavePath);
         ini_set('memory_limit', '12G');
         foreach ($this->walkLogs() as $log) {
-
             $this->info($log);
             $strings = 0;
             $logData = [];
             foreach ($this->walkStrings($log) as $string) {
                 $strings++;
-                // if ($strings % 10000 == 0) {
-                //     echo $strings.': '.memory_get_usage(true).PHP_EOL;
-                // }
                 if ($data = $this->parseLogString($string)) {
                     $logData[$data['l']][$data['d']][$data['s']][] = [$data['q'], $data['isSearch']];
                 } else {
-                    echo $string . PHP_EOL;
+                    file_put_contents('ignoredStrings.txt', $string.PHP_EOL, FILE_APPEND);
                 }
                 if ($strings % 3000000 == 0) {
                     echo $strings . ': ' . memory_get_usage(true) . PHP_EOL;
-                    foreach ($this->processLogData($logData) as $event) {
-                        $this->insert($event);
-                        // dispatch((new AddLinkCreationEventJob($event))->onQueue('import'));
-                    }
+                    $this->processEventArray($logData);
                     $logData = [];
                 }
             }
             $this->info("total: " . $strings);
+            if (!empty($logData)) {
+                $this->processEventArray($logData);
+            }
             unset($logData);
             $this->info('End');
         }
         return 0;
+    }
+
+    /**
+     * @param LinkCreationEvent $event
+     *
+     * @return void
+     */
+    protected function validateEvent(LinkCreationEvent $event)
+    {
+        if (mb_strlen($event->getQueryFirst()->getQuery(), 'UTF-8') > 128) {
+            throw new InvalidArgumentException('Query too long: ' . $event->getQueryFirst()->getQuery());
+        }
+        if (mb_strlen($event->getQuerySecond()->getQuery(), 'UTF-8') > 128) {
+            throw new InvalidArgumentException('Query too long: ' . $event->getQuerySecond()->getQuery());
+        }
+        if (preg_match('#^\d+$#', $event->getQueryFirst()->getQuery())) {
+            throw new InvalidArgumentException('Query is numeric: ' . $event->getQueryFirst()->getQuery());
+        }
+        if (preg_match('#^\d+$#', $event->getQuerySecond()->getQuery())) {
+            throw new InvalidArgumentException('Query is numeric: ' . $event->getQuerySecond()->getQuery());
+        }
+    }
+
+    /**
+     * @param array $logData
+     *
+     * @return void
+     */
+    protected function processEventArray(array $logData): void
+    {
+        $this->info('Processing event array');
+        foreach ($this->processLogData($logData) as $event) {
+            try {
+                $this->validateEvent($event);
+                $this->insert($event);
+            } catch (Throwable $e) {
+                file_put_contents('warnings.log', $e->getMessage().PHP_EOL, FILE_APPEND);
+            }
+        }
     }
 
     /**
@@ -236,8 +273,8 @@ class ImportOldLogs extends Command
     protected function walkLogs(): Generator
     {
         $path = env('LOGS_OLD_PATH', '/tmp');
-        exec("find $path -regex \".*/queryLog.*\" -print", $out);
-        $this->info("find $path -regex \".*/queryLog.*\" -print");
+        exec("find $path -regex \".*/querylog.*\\.txt\" -print", $out);
+        $this->info("find $path -regex \".*/querylog.*\\.txt\" -print");
         foreach ($out as $filename) {
             $this->filename = $filename;
             yield $filename;
@@ -254,6 +291,8 @@ class ImportOldLogs extends Command
         $string = trim($string);
         if (preg_match('~(\d+-\d+-\d+ \d+:\d+:\d+)##([\w\d]{32})##([^#]+)##(\w{2})##(\d)##([^#]+)~s', $string, $args)) {
             return ["t" => $args[1], "s" => $args[2], 'l' => $args[4], 'q' => $this->normalizeQuery($args[6]), 'd' => env('DEFAULT_DOMAIN', 'example.com'), 'isSearch' => ($args[5] > 0)];
+        } elseif (preg_match('~(\d+-\d+-\d+ \d+:\d+:\d+)\|\|([\w\d]{32})\|\|(\w+)\|\|(\w{2})\|\|([^\|]+)\|\|([\d\.]+)\|\|([^\|]+)~s', $string, $args)) {
+            return ["t" => $args[1], "s" => $args[2], 'l' => $args[4], 'q' => $this->normalizeQuery($args[7]), 'd' => $args[5], 'isSearch' => 0];
         } else {
             $list = explode("||", $string);
             if (sizeof($list) != 7) {
@@ -290,6 +329,7 @@ class ImportOldLogs extends Command
     {
         $query = mb_strtolower($query, 'UTF-8');
         $query = preg_replace("#\(.+?\)#s", "", $query);
+
         return $query;
     }
 }
