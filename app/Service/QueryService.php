@@ -10,8 +10,14 @@ use Nbsbbs\Common\Query\QueryInterface;
 
 class QueryService
 {
+    /**
+     * @var \PDO
+     */
     private \PDO $pdo;
 
+    /**
+     * @param \PDO $pdo
+     */
     public function __construct(\PDO $pdo)
     {
         $this->pdo = $pdo;
@@ -21,30 +27,33 @@ class QueryService
      * Find or create StoredQuery
      *
      * @param QueryInterface $query
+     * @param \DateTimeInterface|null $firstSeenDate
      * @return StoredQueryInterface
      */
-    public function locateOrCreate(QueryInterface $query): StoredQueryInterface
+    public function locateOrCreate(QueryInterface $query, ?\DateTimeInterface $firstSeenDate = null): StoredQueryInterface
     {
         if ($storedQuery = $this->find($query)) {
             return $storedQuery;
         } else {
-            return $this->store($query);
+            return $this->store($query, $firstSeenDate);
         }
     }
 
     /**
      * @param QueryInterface $query
+     * @param \DateTimeInterface|null $firstSeenDate
      * @return StoredQueryInterface
      */
-    public function store(QueryInterface $query): StoredQueryInterface
+    public function store(QueryInterface $query, ?\DateTimeInterface $firstSeenDate = null): StoredQueryInterface
     {
         $stmt = $this->pdo->prepare('INSERT INTO `queries` (`language_code`, `query`, `created_at`) VALUES (?, ?, ?)');
 
         try {
+            $activeCreationDate = is_null($firstSeenDate) ? DateTimeService::dateTime() : $firstSeenDate;
             $stmt->execute([
                 $query->getLanguage()->getCode(),
                 $query->getQuery(),
-                DateTimeService::dateTime()->format('Y-m-d H:i:s'),
+                $activeCreationDate->format('Y-m-d H:i:s'),
             ]);
             $id = $this->pdo->lastInsertId();
             return new StoredQuery($id, $query);

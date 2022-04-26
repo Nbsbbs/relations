@@ -25,6 +25,7 @@ class LanguageFactory
         'ru' => RussianLanguage::class,
         'ja' => JapaneseLanguage::class,
         'ko' => KoreanLanguage::class,
+        'ar' => ArabicLanguage::class,
     ];
 
     /**
