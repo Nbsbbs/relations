@@ -66,14 +66,6 @@ class LinksController extends Controller
     }
 
     /**
-     * @return string
-     */
-    protected function getElapsedTime(): string
-    {
-        return number_format(microtime(true) - $this->startStamp, 3);
-    }
-
-    /**
      * @param LinksRequest $linksRequest
      *
      * @return Application|Factory|View
@@ -88,6 +80,7 @@ class LinksController extends Controller
                 'code' => $response->getErrorCode(),
                 'languages' => $this->createLanguages(),
                 'elapsed' => $this->getElapsedTime(),
+                'validated' => $linksRequest->validated(),
             ]);
         } elseif ($response instanceof RelationsResponse) {
             return view('relations', [
@@ -102,6 +95,14 @@ class LinksController extends Controller
         } else {
             throw new RuntimeException('Unexpected response type');
         }
+    }
+
+    /**
+     * @return string
+     */
+    protected function getElapsedTime(): string
+    {
+        return number_format(microtime(true) - $this->startStamp, 3);
     }
 
     /**
